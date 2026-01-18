@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+    <title>Soroban Puzzle Game</title>
+    <style>
+        :root {
+            --bead-pink: #ff8fa3; --bead-red: #e63946; --bead-green: #2a9d8f;
+            --bead-yellow: #e9c46a; --bead-orange: #f4a261; --bead-blue: #457b9d;
+            --bead-white: #e9ecef; --frame-color: #1a1a1a; --beam-color: #333; --rod-color: #666;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', sans-serif;
+            background-color: #ffffff;
+            display: flex; flex-direction: column; align-items: center;
+            /* Fix: Changed to flex-start to keep content at the top when keyboard opens */
+            justify-content: flex-start;
+            min-height: 100vh; margin: 0; user-select: none;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding-top: 20px;
+        }
+
+        #game-container {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 10px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .abacus-scaler {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 0;
+            min-height: 300px;
+        }
+
+        .abacus-frame {
+            background-color: var(--frame-color);
+            padding: 20px; border-radius: 15px; position: relative;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            display: flex; justify-content: center; border: 3px solid #000;
+            flex-shrink: 0;
+            transform-origin: center center;
+        }
+
+        .beam {
+            position: absolute; top: 85px; left: 0; right: 0; height: 16px;
+            background-color: var(--beam-color); border-top: 2px solid #555;
+            border-bottom: 3px solid #000; z-index: 100;
+        }
+
+        .columns-container { display: flex; gap: 16px; position: relative; z-index: 10; }
+
+        .column {
+            display: flex; flex-direction: column; align-items: center;
+            position: relative; width: 48px;
+        }
+
+        .rod {
+            position: absolute; top: -10px; bottom: -10px; width: 8px;
+            background-color: var(--rod-color); z-index: 1; border-radius: 4px;
+        }
+
+        .bead {
+            width: 48px; height: 30px;
+            border-radius: 50% / 100% 100% 100% 100%;
+            transform: scaleY(0.85);
+            background-image: linear-gradient(160deg, rgba(255,255,255,0.5) 0%, rgba(0,0,0,0.2) 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 1px 0; transition: transform 0.2s ease-out;
+            position: relative; z-index: 50;
+        }
+
+        .col-0 .bead { background-color: var(--bead-pink); }
+        .col-1 .bead { background-color: var(--bead-red); }
+        .col-2 .bead { background-color: var(--bead-green); }
+        .col-3 .bead { background-color: var(--bead-yellow); }
+        .col-4 .bead { background-color: var(--bead-orange); }
+        .col-5 .bead { background-color: var(--bead-blue); }
+        .col-6 .bead { background-color: var(--bead-white); }
+
+        .top-deck { height: 65px; display: flex; align-items: flex-start; padding-bottom: 12px; }
+        .bottom-deck { height: 160px; display: flex; flex-direction: column; justify-content: flex-end; padding-top: 12px; }
+
+        .bead.top.active { transform: translateY(35px) scaleY(0.85); }
+        .bead.bottom.active { transform: translateY(-35px) scaleY(0.85); }
+
+        .input-section { margin-top: 20px; display: flex; gap: 15px; background: #f9f9f9; padding: 20px; border-radius: 20px; border: 2px solid #eee; }
+        #answer-input { font-size: 2em; width: 80px; text-align: center; border: 3px solid #ccc; border-radius: 15px; outline: none; }
+        #check-btn { font-size: 1.2em; padding: 10px 20px; background-color: #2a9d8f; color: white; border: none; border-radius: 15px; cursor: pointer; box-shadow: 0 5px #1a7a6f; }
+        #check-btn:active { transform: translateY(3px); box-shadow: 0 2px #1a7a6f; }
+        #message { margin-top: 15px; font-size: 1.5em; font-weight: bold; min-height: 40px; }
+
+        /* MOBILE RESPONSIVENESS FIXES */
+        @media (max-width: 500px) {
+            body { padding-top: 10px; }
+            .abacus-frame { transform: scale(0.7); }
+            .abacus-scaler {
+                height: 200px;
+                min-height: 200px;
+                margin-bottom: 10px;
+            }
+            h1 { font-size: 1.6em !important; margin: 5px 0 !important; }
+            .input-section { margin-top: 10px; padding: 12px; }
+        }
+
+        .shake { animation: shake 0.4s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+    </style>
+</head>
+<body>
+
+    <h1 style="font-size: 2.5em; color: #444; margin: 10px 0;">Abacus Puzzle</h1>
+
+    <div id="game-container">
+        <div class="abacus-scaler">
+            <div class="abacus-frame">
+                <div class="beam"></div>
+                <div class="columns-container" id="abacus-columns"></div>
+            </div>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="input-section">
+            <input type="number" id="answer-input" placeholder="?" inputmode="numeric">
+            <button id="check-btn">CHECK</button>
+        </div>
+    </div>
+
+    <audio id="sound-correct"></audio>
+    <audio id="sound-wrong"></audio>
+    <script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
+
+    <script>
+        const abacusContainer = document.getElementById('abacus-columns');
+        const answerInput = document.getElementById('answer-input');
+        const checkBtn = document.getElementById('check-btn');
+        const messageDiv = document.getElementById('message');
+        const jsConfetti = new JSConfetti();
+        let currentTargetNumber = 0; let isProcessing = false;
+
+        function build() {
+            for (let i = 0; i < 7; i++) {
+                const col = document.createElement('div');
+                col.className = `column col-${i}`;
+                col.innerHTML = `<div class="rod"></div><div class="top-deck"><div class="bead top" id="c${i}t"></div></div><div class="bottom-deck" id="c${i}b"></div>`;
+                const bDeck = col.querySelector('.bottom-deck');
+                for (let j = 0; j < 4; j++) bDeck.innerHTML += `<div class="bead bottom" id="c${i}b${j}"></div>`;
+                abacusContainer.appendChild(col);
+            }
+        }
+
+        function setPuzzle(n) {
+            document.querySelectorAll('.bead').forEach(b => b.classList.remove('active'));
+            const u = n % 10, t = Math.floor((n / 10) % 10), h = Math.floor(n / 100);
+            const draw = (col, val) => {
+                if (val >= 5) { document.getElementById(`c${col}t`).classList.add('active'); val -= 5; }
+                for (let i = 0; i < val; i++) document.getElementById(`c${col}b${i}`).classList.add('active');
+            };
+            draw(6, u); draw(5, t); if (h > 0) draw(4, h);
+        }
+
+        function start() {
+            currentTargetNumber = Math.floor(Math.random() * 101);
+            setPuzzle(currentTargetNumber);
+            answerInput.value = ''; messageDiv.textContent = ''; isProcessing = false;
+            answerInput.focus();
+        }
+
+        checkBtn.onclick = () => {
+            if (isProcessing) return;
+            if (parseInt(answerInput.value) === currentTargetNumber) {
+                isProcessing = true;
+                messageDiv.innerHTML = "<span style='color:#2a9d8f'>Correct! 🥳 </span>";
+                document.getElementById('sound-correct').play();
+                jsConfetti.addConfetti();
+                setTimeout(start, 2500);
+            } else {
+                messageDiv.innerHTML = "<span style='color:#e63946'>Try again! ❌</span>";
+                document.getElementById('sound-wrong').play();
+                document.querySelector('.input-section').classList.add('shake');
+                setTimeout(() => document.querySelector('.input-section').classList.remove('shake'), 400);
+                answerInput.select();
+            }
+        };
+
+        // Scroll fix for mobile keyboards
+        answerInput.addEventListener('focus', () => {
+            setTimeout(() => {
+                answerInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300);
+        });
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        document.getElementById('sound-correct').play = function() {
+            const now = audioContext.currentTime;
+            const notes = [261.63, 329.63, 392.00, 523.25];
+            const noteDuration = 0.08;
+            notes.forEach((freq, i) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.type = 'sine';
+                const startTime = now + (i * noteDuration);
+                oscillator.frequency.setValueAtTime(freq, startTime);
+                gainNode.gain.setValueAtTime(0, startTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + noteDuration + 0.1);
+                oscillator.start(startTime);
+                oscillator.stop(startTime + noteDuration + 0.1);
+            });
+        };
+
+        document.getElementById('sound-wrong').play = function() {
+            const now = audioContext.currentTime;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(200, now);
+            oscillator.frequency.linearRampToValueAtTime(100, now + 0.2);
+            gainNode.gain.setValueAtTime(0.2, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            oscillator.start(now);
+            oscillator.stop(now + 0.2);
+        };
+
+        answerInput.onkeydown = (e) => { if(e.key === 'Enter') checkBtn.click(); };
+        build(); start();
+    </script>
+</body>
+</html>

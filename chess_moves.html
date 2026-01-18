@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Can I Eat the Candy? - Chess Puzzle</title>
+    <style>
+        /* --- 1. THEME & LAYOUT --- */
+        :root {
+            --board-light: #FFFFFF; /* White */
+            --board-dark: #F0A0B8;  /* Soft Pink/Rose */
+            --background: #F8F8F8; /* Very light, neutral background */
+            --candy: #FF4560; /* Bright red for candy */
+            --text-color: #333333;
+            --correct-color: #4CAF50; /* Green */
+            --error-color: #F44336; /* Red */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--background);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: var(--text-color);
+            font-family: 'Arial', sans-serif;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* --- 2. BOARD STYLES --- */
+        #chessboard {
+            width: 70vmin; /* Responsive board size */
+            height: 70vmin;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border: 8px solid var(--board-dark);
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            /* Inset shadow for a slight 3D look without being flat */
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .light { background-color: var(--board-light); }
+        .dark { background-color: var(--board-dark); }
+
+        /* --- 3. PIECE & CANDY STYLES --- */
+        .piece-container {
+            position: absolute;
+            width: 12.5%; /* 1/8 of the board */
+            height: 12.5%;
+            top: 0;
+            left: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.8s cubic-bezier(0.5, 0, 0.5, 1); /* Smoother animation */
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .piece {
+            font-size: 5.5vmin; /* Large emoji size */
+            line-height: 1;
+            filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
+        }
+
+        .candy {
+            position: absolute;
+            width: 5.5vmin;
+            height: 5.5vmin;
+            background-color: var(--candy);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3vmin;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 0 15px var(--candy), 0 0 25px rgba(255, 69, 96, 0.5);
+            transition: opacity 0.3s;
+            z-index: 10;
+        }
+
+        /* --- 4. UI & FEEDBACK --- */
+        #question {
+            font-size: 1.8em;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+            border-radius: 10px;
+            min-height: 40px;
+            color: var(--text-color);
+        }
+
+        #controls {
+            display: flex;
+            gap: 40px;
+        }
+
+        .choice-button {
+            padding: 15px 40px;
+            font-size: 2em;
+            font-weight: bold;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            box-shadow: 0 7px 0 0 rgba(0, 0, 0, 0.2);
+            transition: all 0.1s;
+        }
+
+        .choice-button:active {
+            transform: translateY(7px);
+            box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.2);
+        }
+
+        #yes-button {
+            background-color: var(--correct-color);
+            color: white;
+        }
+
+        #no-button {
+            background-color: var(--error-color);
+            color: white;
+        }
+
+        /* --- 5. FIREWORKS (AESTHETICS) --- */
+        .firework {
+          position: absolute;
+          width: 5px;
+          height: 5px;
+          opacity: 0;
+          border-radius: 50%;
+          animation: explode 0.5s ease-out forwards;
+          z-index: 100;
+        }
+
+        @keyframes explode {
+          0% { transform: scale(1); opacity: 1; }
+          100% { transform: scale(50); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="question"></div>
+
+        <div id="chessboard">
+            <div id="piece-container" class="piece-container">
+                <span class="piece"></span>
+            </div>
+        </div>
+
+        <div id="controls">
+            <button id="yes-button" class="choice-button">YES!</button>
+            <button id="no-button" class="choice-button">NO!</button>
+        </div>
+    </div>
+
+    <audio id="correct-sound" </audio>
+    <audio id="error-sound" </audio>
+
+    <script>
+        // --- CHESS PIECE EMOJIS (Black pieces for contrast) ---
+        const PIECE_EMOJIS = {
+            'R': '♜',
+            'N': '♞',
+            'B': '♝',
+            'Q': '♛',
+        };
+
+        // --- GAME STATE AND ELEMENTS ---
+        let gameState = {
+            pieceType: null,
+            piecePos: { r: 0, c: 0 },
+            candyPos: { r: 0, c: 0 },
+            correctAnswer: false
+        };
+
+        const boardEl = document.getElementById('chessboard');
+        const pieceContainerEl = document.getElementById('piece-container');
+        const pieceEl = pieceContainerEl.querySelector('.piece');
+        const questionEl = document.getElementById('question');
+        const yesButton = document.getElementById('yes-button');
+        const noButton = document.getElementById('no-button');
+        const correctSound = document.getElementById('correct-sound');
+        const errorSound = document.getElementById('error-sound');
+        const pieceNames = ['Rook', 'Knight', 'Bishop', 'Queen'];
+        const pieceKeys = ['R', 'N', 'B', 'Q'];
+
+        // --- CORE CHESS LOGIC (Simplified) ---
+
+        /** Converts {r: row, c: col} to a transform string for CSS */
+        function getTransform(r, c) {
+            // Chess board coordinates: row 0 is the top (8th rank), row 7 is the bottom (1st rank)
+            return `translate(${c * 100}%, ${r * 100}%)`;
+        }
+
+        /** Checks if a move is valid for the current piece type */
+        function isMoveValid(piece, start, end) {
+            const dr = Math.abs(start.r - end.r);
+            const dc = Math.abs(start.c - end.c);
+
+            if (dr === 0 && dc === 0) return false;
+
+            switch (piece) {
+                case 'R': // Rook: straight lines
+                    return (dr === 0 && dc > 0) || (dc === 0 && dr > 0);
+                case 'N': // Knight: L-shape
+                    return (dr === 1 && dc === 2) || (dr === 2 && dc === 1);
+                case 'B': // Bishop: diagonals
+                    return dr === dc;
+                case 'Q': // Queen: straight or diagonal
+                    return (dr === 0 || dc === 0 || dr === dc);
+                default:
+                    return false;
+            }
+        }
+
+        // --- GAME GENERATION LOGIC (50/50 Chance) ---
+
+        /** Generates a new puzzle state */
+        function generatePuzzle() {
+            // 1. Pick a random piece
+            const pieceIndex = Math.floor(Math.random() * pieceKeys.length);
+            const pieceKey = pieceKeys[pieceIndex];
+            const pieceName = pieceNames[pieceIndex];
+
+            // 2. Pick a random start position (0-7 for r/c)
+            const startR = Math.floor(Math.random() * 8);
+            const startC = Math.floor(Math.random() * 8);
+
+            // 3. Determine if the answer SHOULD be YES or NO (50/50)
+            const shouldBeYes = Math.random() < 0.5;
+
+            let endR, endC, attempts = 0;
+            let isValidMove;
+
+            // 4. Find an end position that matches the required answer
+            do {
+                endR = Math.floor(Math.random() * 8);
+                endC = Math.floor(Math.random() * 8);
+
+                if (startR === endR && startC === endC) continue;
+
+                isValidMove = isMoveValid(pieceKey, { r: startR, c: startC }, { r: endR, c: endC });
+                attempts++;
+
+                if (attempts > 100) break;
+
+            } while (isValidMove !== shouldBeYes);
+
+            // 5. Update the game state
+            gameState.pieceType = pieceKey;
+            gameState.piecePos = { r: startR, c: startC };
+            gameState.candyPos = { r: endR, c: endC };
+            gameState.correctAnswer = isValidMove;
+
+            // 6. Render the board
+            renderBoard();
+
+            // 7. Update the question
+            questionEl.textContent = `Can the ${pieceName} ${PIECE_EMOJIS[pieceKey]} eat the candy?`;
+
+            // 8. Enable buttons
+            yesButton.disabled = false;
+            noButton.disabled = false;
+        }
+
+        /** Draws the board and places the pieces/candy */
+        function renderBoard() {
+            boardEl.innerHTML = ''; // Clear board
+
+            // 1. Draw Squares
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const squareEl = document.createElement('div');
+                    squareEl.className = 'square ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+                    squareEl.dataset.r = r;
+                    squareEl.dataset.c = c;
+                    boardEl.appendChild(squareEl);
+
+                    // 2. Place Candy
+                    if (r === gameState.candyPos.r && c === gameState.candyPos.c) {
+                        const candyEl = document.createElement('div');
+                        candyEl.className = 'candy';
+                        candyEl.textContent = '🍬'; // Candy Emoji
+                        squareEl.appendChild(candyEl);
+                    }
+                }
+            }
+
+            // 3. Place Piece Container back
+            boardEl.appendChild(pieceContainerEl);
+
+            // 4. Update Piece Emoji
+            pieceEl.textContent = PIECE_EMOJIS[gameState.pieceType];
+
+            // 5. Set initial piece position
+            pieceContainerEl.style.transform = getTransform(gameState.piecePos.r, gameState.piecePos.c);
+            // Reset transition for new puzzle
+            pieceContainerEl.style.transition = 'none';
+            setTimeout(() => {
+                 pieceContainerEl.style.transition = 'transform 0.8s cubic-bezier(0.5, 0, 0.5, 1)';
+            }, 50);
+        }
+
+        // --- FEEDBACK & ANIMATION ---
+
+        /** Creates a visual firework effect */
+        function createFireworks(x, y) {
+            const colors = ['#FFD700', '#F0A0B8', '#4CAF50', '#FFFFFF', '#FF6347'];
+            for (let i = 0; i < 15; i++) {
+                const firework = document.createElement('div');
+                firework.className = 'firework';
+                firework.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+
+                firework.style.left = `${x + Math.random() * 20 - 10}px`;
+                firework.style.top = `${y + Math.random() * 20 - 10}px`;
+
+                firework.style.animationName = 'explode';
+                firework.style.animationDuration = `${0.5 + Math.random() * 0.3}s`;
+                firework.style.animationDelay = `${Math.random() * 0.2}s`;
+
+                document.body.appendChild(firework);
+
+                firework.addEventListener('animationend', () => firework.remove());
+            }
+        }
+
+        /** Animates the piece move if the answer is YES */
+        function animateMove(r, c) {
+            yesButton.disabled = true;
+            noButton.disabled = true;
+
+            // 1. Move the piece to the candy's position
+            pieceContainerEl.style.transform = getTransform(r, c);
+
+            // 2. Remove the candy
+            const candySquare = document.querySelector(`.square[data-r="${r}"][data-c="${c}"]`);
+            const candyEl = candySquare ? candySquare.querySelector('.candy') : null;
+            if (candyEl) candyEl.style.opacity = 0;
+
+            // 3. Fireworks!
+            if (candySquare) {
+                const rect = candySquare.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+
+                setTimeout(() => {
+                    createFireworks(centerX, centerY);
+                }, 700);
+            }
+
+            // 4. Wait for animation and refresh
+            setTimeout(generatePuzzle, 2500);
+        }
+
+        /** Handles a button click (answer submission) */
+        function handleAnswer(userAnswer) {
+            const isCorrect = (userAnswer === 'yes' && gameState.correctAnswer) || (userAnswer === 'no' && !gameState.correctAnswer);
+
+            yesButton.disabled = true;
+            noButton.disabled = true;
+
+            if (isCorrect) {
+                correctSound.play();
+                questionEl.textContent = "🥳 YAY! YOU GOT IT! 🥳";
+
+                if (gameState.correctAnswer) {
+                    animateMove(gameState.candyPos.r, gameState.candyPos.c);
+                    celebrateSuccess();
+                } else {
+                    celebrateSuccess();
+                    setTimeout(generatePuzzle, 1500);
+                }
+            } else {
+                errorSound.play();
+                questionEl.textContent = "😔 Oops! Try again. 😔";
+
+                // Add a visual glow for error
+                boardEl.style.boxShadow = `0 0 30px 10px var(--error-color)`;
+                setTimeout(() => {
+                    boardEl.style.boxShadow = `0 10px 30px rgba(0, 0, 0, 0.1)`;
+
+                    // Re-enable buttons for next try
+                    yesButton.disabled = false;
+                    noButton.disabled = false;
+                }, 1000);
+            }
+        }
+
+        // --- EVENT LISTENERS & INITIALIZATION ---
+
+        yesButton.addEventListener('click', () => handleAnswer('yes'));
+        noButton.addEventListener('click', () => handleAnswer('no'));
+
+        // Start the game!
+        window.onload = generatePuzzle;
+
+        // Create audio context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create mock audio elements that work like HTMLAudioElement
+        document.getElementById('correct-sound').play = function() {
+            const now = audioContext.currentTime;
+
+            // Play a cheerful ascending arpeggio (C - E - G - C)
+            const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+            const noteDuration = 0.08;
+
+            notes.forEach((freq, i) => {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.type = 'sine';
+
+                const startTime = now + (i * noteDuration);
+                oscillator.frequency.setValueAtTime(freq, startTime);
+
+                // Quick attack and decay for each note
+                gainNode.gain.setValueAtTime(0, startTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + noteDuration + 0.1);
+
+                oscillator.start(startTime);
+                oscillator.stop(startTime + noteDuration + 0.1);
+            });
+        };
+
+        document.getElementById('error-sound').play = function() {
+            const now = audioContext.currentTime;
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.type = 'triangle';
+
+            oscillator.frequency.setValueAtTime(200, now);
+            oscillator.frequency.linearRampToValueAtTime(100, now + 0.2);
+
+            gainNode.gain.setValueAtTime(0.2, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.2);
+        };
+
+        function celebrateSuccess() {
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#ffd93d', '#6bcf7f', '#a78bfa'];
+            const confettiCount = 100;
+            const container = document.createElement('div');
+
+            container.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 9999;
+            `;
+
+            document.body.appendChild(container);
+
+            // Add animation keyframes if not already added
+            if (!document.getElementById('confetti-styles')) {
+                const style = document.createElement('style');
+                style.id = 'confetti-styles';
+                style.textContent = `
+                @keyframes fall {
+                    0% {
+                    transform: translateY(0) rotate(0deg);
+                    opacity: 1;
+                    }
+                    100% {
+                    transform: translateX(var(--deltaX))
+                                translateY(var(--endY))
+                                rotate(var(--rotation));
+                    opacity: 0;
+                    }
+                }
+                `;
+                document.head.appendChild(style);
+            }
+
+            for (let i = 0; i < confettiCount; i++) {
+                const confetti = document.createElement('div');
+                const size = Math.random() * 10 + 5;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const startX = Math.random() * 100;
+                const deltaX = (Math.random() - 0.5) * 100;
+                const endY = 100 + Math.random() * 20;
+                const delay = Math.random() * 0.3;
+                const duration = Math.random() * 1.5 + 1.5;
+                const rotation = Math.random() * 720;
+
+                confetti.style.cssText = `
+                position: absolute;
+                width: ${size}px;
+                height: ${size}px;
+                background: ${color};
+                top: -20px;
+                left: ${startX}%;
+                opacity: 1;
+                border-radius: ${Math.random() > 0.5 ? '50%' : '0'};
+                animation: fall ${duration}s ease-in ${delay}s forwards;
+                `;
+
+                confetti.style.setProperty('--deltaX', `${deltaX}vw`);
+                confetti.style.setProperty('--endY', `${endY}vh`);
+                confetti.style.setProperty('--rotation', `${rotation}deg`);
+
+                container.appendChild(confetti);
+            }
+
+            // Clean up after animation
+            setTimeout(() => {
+                container.remove();
+            }, 3500);
+        }
+
+        // Example usage:
+        // Call celebrateSuccess() when player succeeds
+        // celebrateSuccess();
+
+    </script>
+</body>
+</html>

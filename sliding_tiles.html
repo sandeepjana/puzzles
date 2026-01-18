@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sliding Tile Puzzle</title>
+    <script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
+    <style>
+        :root {
+            --bg-color: #ffffff;
+            --tile-color: #B2D8B2;
+            --tile-text: #1B4D3E;
+            --gap: 8px; /* Slightly larger gap for cleaner look */
+            --board-size: min(90vw, 400px);
+            --tile-size: calc((var(--board-size) - (var(--gap) * 4)) / 3);
+        }
+
+        /* Dark mode (system preference) */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #121212;
+                --tile-color: #B2D8B2;
+                --tile-text: #1B4D3E;
+                --gap: 8px; /* Slightly larger gap for cleaner look */
+                --board-size: min(90vw, 400px);
+                --tile-size: calc((var(--board-size) - (var(--gap) * 4)) / 3);
+            }
+        }
+
+        /* Automatic System Dark Mode Detection */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #121212;
+            }
+            h2, p {
+                color: #d39191;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: #d39191;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden; /* Prevent pull-to-refresh on mobile */
+            touch-action: none; /* Disable default browser touch actions */
+        }
+
+        #message-area {
+            height: 30px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        /* Board - Using Relative positioning for drag calculations */
+        .board {
+            position: relative;
+            width: var(--board-size);
+            height: var(--board-size);
+            background-color: #f0f0f0;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            /* Padding is handled by absolute positioning logic now for smoother anims */
+        }
+
+        .tile {
+            position: absolute;
+            width: var(--tile-size);
+            height: var(--tile-size);
+            background-color: var(--tile-color);
+            color: var(--tile-text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+
+            /* Smooth transition for clicks and resets, but removed during drag via JS */
+            transition: transform 0.2s ease-out, top 0.2s ease-out, left 0.2s ease-out;
+
+            /* Crucial for drag */
+            touch-action: none;
+            z-index: 10;
+        }
+
+        .tile.empty {
+            background: transparent;
+            box-shadow: none;
+            z-index: 0;
+        }
+
+        /* Controls */
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            z-index: 20;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1rem;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.1s, opacity 0.2s;
+        }
+
+        button:active { transform: scale(0.95); opacity: 0.9; }
+        .btn-shuffle { background-color: #ffd166; color: #444; }
+        .btn-start { background-color: #06d6a0; color: white; }
+        .btn-reset { background-color: #ef476f; color: white; }
+
+        /* Animation classes */
+        .shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        @keyframes shake {
+            10%, 90% { transform: translateX(-2px); }
+            20%, 80% { transform: translateX(4px); }
+            30%, 50%, 70% { transform: translateX(-6px); }
+            40%, 60% { transform: translateX(6px); }
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Sliding Puzzle</h2>
+    <p>Drag tiles to move or Tap to slide multiple.</p>
+
+    <div id="message-area">Setup Phase</div>
+
+    <div class="board" id="board">
+        </div>
+
+    <div class="controls">
+        <button class="btn-shuffle" onclick="handleShuffle()">Shuffle</button>
+        <button class="btn-start" onclick="startGame()">Start</button>
+        <button class="btn-reset" onclick="resetGame()">Reset</button>
+    </div>
+
+    <script>
+        const jsConfetti = new JSConfetti();
+        const boardEl = document.getElementById('board');
+        const messageDiv = document.getElementById('message-area');
+
+        // Config
+        let tiles = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+        const gridSize = 3;
+        let isGameActive = false;
+        let isProcessingWin = false;
+
+        // Visual Metrics (calculated on load/resize)
+        let boardWidth, tileTotalSize, gapSize;
+
+        // Audio Context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const initAudio = () => { if (audioContext.state === 'suspended') audioContext.resume(); };
+        const playTone = (freqs, type = 'sine', duration = 0.1) => {
+            initAudio();
+            const now = audioContext.currentTime;
+            freqs.forEach((f, i) => {
+                const osc = audioContext.createOscillator();
+                const g = audioContext.createGain();
+                osc.type = type; osc.connect(g); g.connect(audioContext.destination);
+                osc.frequency.setValueAtTime(f, now + (i * 0.08));
+                g.gain.setValueAtTime(0, now + (i * 0.08));
+                g.gain.linearRampToValueAtTime(0.2, now + (i * 0.08) + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.08) + duration);
+                osc.start(now + (i * 0.08)); osc.stop(now + (i * 0.08) + duration + 0.1);
+            });
+        };
+        const soundCorrect = { play: () => playTone([261.6, 329.6, 392, 523.2]) };
+
+        // ---------------------------------------------------------
+        // Core Logic & Rendering
+        // ---------------------------------------------------------
+
+        function updateMetrics() {
+            // Read CSS variables and dimensions to map JS logic to visual pixels
+            const computedStyle = getComputedStyle(document.documentElement);
+            boardWidth = boardEl.clientWidth;
+            // Parse '5px' to 5
+            gapSize = parseInt(computedStyle.getPropertyValue('--gap')) || 5;
+            // Calculate exact tile stride (width + gap)
+            tileTotalSize = (boardWidth - gapSize) / gridSize;
+        }
+
+        // We use absolute positioning for Drag support
+        function getVisualPosition(index) {
+            const r = Math.floor(index / gridSize);
+            const c = index % gridSize;
+            // Add 1 gap offset to the start
+            return {
+                left: gapSize + (c * tileTotalSize),
+                top: gapSize + (r * tileTotalSize)
+            };
+        }
+
+        function renderBoard() {
+            boardEl.innerHTML = '';
+            updateMetrics();
+
+            tiles.forEach((num, index) => {
+                const tile = document.createElement('div');
+                tile.className = num === 0 ? 'tile empty' : 'tile';
+                tile.textContent = num === 0 ? '' : num;
+                tile.id = `tile-${index}`; // ID helps tracking during drag
+
+                // Set initial Position
+                const pos = getVisualPosition(index);
+                tile.style.left = `${pos.left}px`;
+                tile.style.top = `${pos.top}px`;
+
+                // Attach Events
+                if (num !== 0) {
+                    // Mouse
+                    tile.addEventListener('mousedown', (e) => startDrag(e, index));
+                    // Touch
+                    tile.addEventListener('touchstart', (e) => startDrag(e, index), {passive: false});
+
+                    // Click fallback (handled inside drag logic if no drag occurred)
+                }
+
+                boardEl.appendChild(tile);
+            });
+        }
+
+        // ---------------------------------------------------------
+        // Drag & Move Engine
+        // ---------------------------------------------------------
+        let dragTileIdx = null;
+        let startX = 0, startY = 0;
+        let currentX = 0, currentY = 0;
+        let isDragging = false;
+        let dragAxis = null; // 'x' or 'y'
+        let emptyNeighborDirection = 0; // -1 or 1
+
+        function startDrag(e, index) {
+            if (isProcessingWin) return;
+            initAudio();
+
+            // Prevent default touch behavior (scrolling)
+            if(e.type === 'touchstart') e.preventDefault();
+
+            const emptyIndex = tiles.indexOf(0);
+            const r = Math.floor(index / gridSize);
+            const c = index % gridSize;
+            const er = Math.floor(emptyIndex / gridSize);
+            const ec = emptyIndex % gridSize;
+
+            // Check if direct neighbor (for drag physics)
+            const isNeighbor = (Math.abs(r - er) + Math.abs(c - ec)) === 1;
+
+            if (!isNeighbor) {
+                // If not a neighbor, we don't drag, but we listen for 'click' (mouseup/touchend)
+                // to trigger the multi-slide feature.
+                const onUp = () => {
+                    handleTileClick(index);
+                    removeListeners();
+                };
+                const removeListeners = () => {
+                    window.removeEventListener('mouseup', onUp);
+                    window.removeEventListener('touchend', onUp);
+                };
+                window.addEventListener('mouseup', onUp);
+                window.addEventListener('touchend', onUp);
+                return;
+            }
+
+            // Setup Drag
+            dragTileIdx = index;
+            isDragging = true;
+            const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+            startX = clientX;
+            startY = clientY;
+
+            // Determine Axis and Direction
+            if (r === er) {
+                dragAxis = 'x';
+                emptyNeighborDirection = (ec > c) ? 1 : -1; // 1 means empty is to right
+            } else {
+                dragAxis = 'y';
+                emptyNeighborDirection = (er > r) ? 1 : -1; // 1 means empty is below
+            }
+
+            // Remove transition for instant drag response
+            const tileEl = document.getElementById(`tile-${index}`);
+            tileEl.style.transition = 'none';
+
+            // Attach global move/up listeners
+            window.addEventListener('mousemove', onDragMove);
+            window.addEventListener('touchmove', onDragMove, {passive: false});
+            window.addEventListener('mouseup', onDragEnd);
+            window.addEventListener('touchend', onDragEnd);
+        }
+
+        function onDragMove(e) {
+            if (!isDragging) return;
+            // Stop scroll
+            if(e.cancelable) e.preventDefault();
+
+            const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const clientY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            const tileEl = document.getElementById(`tile-${dragTileIdx}`);
+            const maxMove = tileTotalSize - gapSize; // Approx size of one tile slot
+
+            if (dragAxis === 'x') {
+                // Limit movement: can only move towards empty slot
+                // If direction is 1 (right), dx should be 0 to maxMove
+                let moveX = dx;
+                if (emptyNeighborDirection === 1) moveX = Math.max(0, Math.min(dx, maxMove));
+                else moveX = Math.min(0, Math.max(dx, -maxMove));
+
+                tileEl.style.transform = `translate3d(${moveX}px, 0, 0)`;
+                currentX = moveX;
+            } else {
+                let moveY = dy;
+                if (emptyNeighborDirection === 1) moveY = Math.max(0, Math.min(dy, maxMove));
+                else moveY = Math.min(0, Math.max(dy, -maxMove));
+
+                tileEl.style.transform = `translate3d(0, ${moveY}px, 0)`;
+                currentY = moveY;
+            }
+        }
+
+        function onDragEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+
+            const tileEl = document.getElementById(`tile-${dragTileIdx}`);
+
+            // Determine if move was substantial enough (> 40% of tile size)
+            const movedDist = (dragAxis === 'x') ? Math.abs(currentX) : Math.abs(currentY);
+            const threshold = (tileTotalSize - gapSize) * 0.4;
+
+            window.removeEventListener('mousemove', onDragMove);
+            window.removeEventListener('touchmove', onDragMove);
+            window.removeEventListener('mouseup', onDragEnd);
+            window.removeEventListener('touchend', onDragEnd);
+
+            if (movedDist > threshold) {
+                // Complete the move
+                handleTileClick(dragTileIdx); // This function handles logic + re-render
+            } else {
+                // Snap back
+                tileEl.style.transition = 'transform 0.2s ease-out';
+                tileEl.style.transform = 'translate3d(0,0,0)';
+                // If it was a tiny tap (not a drag), treat as click
+                if (movedDist < 5) handleTileClick(dragTileIdx);
+            }
+
+            // Reset vars
+            dragTileIdx = null; currentX = 0; currentY = 0;
+        }
+
+        // ---------------------------------------------------------
+        // Game Logic (Multi-Slide + Win)
+        // ---------------------------------------------------------
+
+        function handleTileClick(index) {
+            if (isProcessingWin) return;
+
+            const emptyIndex = tiles.indexOf(0);
+            const r = Math.floor(index / gridSize);
+            const c = index % gridSize;
+            const er = Math.floor(emptyIndex / gridSize);
+            const ec = emptyIndex % gridSize;
+
+            // Check if valid move (same row or col)
+            if (r === er) {
+                // Horizontal Multi-slide
+                const dir = c < ec ? 1 : -1; // 1 means slide right
+                // If c < ec (clicked left of empty), we shift [c..ec-1] to right
+                // Standardizing: just loop from empty towards clicked
+                if (c < ec) {
+                    for (let i = ec; i > c; i--) swap(i + r*gridSize, (i-1) + r*gridSize);
+                } else {
+                    for (let i = ec; i < c; i++) swap(i + r*gridSize, (i+1) + r*gridSize);
+                }
+                finalizeMove();
+            } else if (c === ec) {
+                // Vertical Multi-slide
+                if (r < er) {
+                    for (let i = er; i > r; i--) swap(c + i*gridSize, c + (i-1)*gridSize);
+                } else {
+                    for (let i = er; i < r; i++) swap(c + i*gridSize, c + (i+1)*gridSize);
+                }
+                finalizeMove();
+            } else {
+                // Invalid
+                if(isGameActive) {
+                    boardEl.classList.add('shake');
+                    setTimeout(() => boardEl.classList.remove('shake'), 400);
+                }
+            }
+        }
+
+        function swap(i1, i2) {
+            [tiles[i1], tiles[i2]] = [tiles[i2], tiles[i1]];
+        }
+
+        function finalizeMove() {
+            renderBoard();
+            checkWinCondition();
+        }
+
+        function checkWinCondition() {
+            if (!isGameActive) return;
+            const isSolved = tiles.every((val, index) => {
+                if (index === 8) return val === 0;
+                return val === index + 1;
+            });
+
+            if (isSolved) {
+                isProcessingWin = true;
+                messageDiv.innerHTML = "<span style='color:#2a9d8f'>Correct! 🥳</span>";
+                soundCorrect.play();
+                jsConfetti.addConfetti({ emojis: ['🥳', '✨', '🧩'], confettiRadius: 6, confettiNumber: 100 });
+                isGameActive = false;
+            }
+        }
+
+        // ---------------------------------------------------------
+        // Controls
+        // ---------------------------------------------------------
+
+        function handleShuffle() {
+            if (isProcessingWin) return;
+            isGameActive = false;
+            messageDiv.innerHTML = "Shuffling...";
+            let moves = 0;
+            const interval = setInterval(() => {
+                const emptyIndex = tiles.indexOf(0);
+                const neighbors = [];
+                const p = { r: Math.floor(emptyIndex/3), c: emptyIndex%3 };
+                if (p.r > 0) neighbors.push(emptyIndex - 3);
+                if (p.r < 2) neighbors.push(emptyIndex + 3);
+                if (p.c > 0) neighbors.push(emptyIndex - 1);
+                if (p.c < 2) neighbors.push(emptyIndex + 1);
+
+                swap(emptyIndex, neighbors[Math.floor(Math.random() * neighbors.length)]);
+                renderBoard();
+                moves++;
+                if (moves >= 80) {
+                    clearInterval(interval);
+                    messageDiv.innerHTML = "Ready? Click Start!";
+                    messageDiv.style.color = "#333";
+                }
+            }, 10);
+        }
+
+        function startGame() {
+            isGameActive = true;
+            isProcessingWin = false;
+            messageDiv.innerHTML = "Game Started!";
+            messageDiv.style.color = "#333";
+            checkWinCondition();
+        }
+
+        function resetGame() {
+            isGameActive = false;
+            isProcessingWin = false;
+            tiles = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+            renderBoard();
+            messageDiv.innerHTML = "Board Reset";
+            messageDiv.style.color = "#333";
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => { renderBoard(); });
+
+        // Init
+        renderBoard();
+
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            console.log("System is in Dark Mode");
+        }
+
+        // Watch for real-time changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            const newColorScheme = event.matches ? "dark" : "light";
+            console.log(`System switched to ${newColorScheme} mode`);
+        });
+
+    </script>
+</body>
+</html>

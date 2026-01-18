@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+    <title>Abacus Puzzle Game</title>
+    <style>
+        :root {
+            --bead-pink: #ff8fa3; --bead-red: #e63946; --bead-green: #2a9d8f;
+            --bead-yellow: #e9c46a; --bead-orange: #f4a261; --bead-blue: #457b9d;
+            --bead-white: #e9ecef; --frame-color: #1a1a1a; --beam-color: #333; --rod-color: #666;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', sans-serif;
+            background-color: #ffffff;
+            display: flex; flex-direction: column; align-items: center;
+            /* Fix: Changed to flex-start to keep content at the top when keyboard opens */
+            justify-content: flex-start;
+            min-height: 100vh; margin: 0; user-select: none;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding-top: 20px;
+        }
+
+        #game-container {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 600px;
+            padding: 10px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .abacus-scaler {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px 0;
+            min-height: 300px;
+        }
+
+        .abacus-frame {
+            background-color: var(--frame-color);
+            padding: 20px; border-radius: 15px; position: relative;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            display: flex; justify-content: center; border: 3px solid #000;
+            flex-shrink: 0;
+            transform-origin: center center;
+        }
+
+        .beam {
+            position: absolute; top: 85px; left: 0; right: 0; height: 16px;
+            background-color: var(--beam-color); border-top: 2px solid #555;
+            border-bottom: 3px solid #000; z-index: 100;
+        }
+
+        .columns-container { display: flex; gap: 16px; position: relative; z-index: 10; }
+
+        .column {
+            display: flex; flex-direction: column; align-items: center;
+            position: relative; width: 48px;
+        }
+
+        .rod {
+            position: absolute; top: -10px; bottom: -10px; width: 8px;
+            background-color: var(--rod-color); z-index: 1; border-radius: 4px;
+        }
+
+        .bead {
+            width: 48px; height: 30px;
+            border-radius: 50% / 100% 100% 100% 100%;
+            transform: scaleY(0.85);
+            background-image: linear-gradient(160deg, rgba(255,255,255,0.5) 0%, rgba(0,0,0,0.2) 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 1px 0; transition: transform 0.2s ease-out;
+            position: relative; z-index: 50;
+        }
+
+        .col-0 .bead { background-color: var(--bead-pink); }
+        .col-1 .bead { background-color: var(--bead-red); }
+        .col-2 .bead { background-color: var(--bead-green); }
+        .col-3 .bead { background-color: var(--bead-yellow); }
+        .col-4 .bead { background-color: var(--bead-orange); }
+        .col-5 .bead { background-color: var(--bead-blue); }
+        .col-6 .bead { background-color: var(--bead-white); }
+
+        .top-deck { height: 65px; display: flex; align-items: flex-start; padding-bottom: 12px; }
+        .bottom-deck { height: 160px; display: flex; flex-direction: column; justify-content: flex-end; padding-top: 12px; }
+
+        .bead.top.active { transform: translateY(35px) scaleY(0.85); }
+        .bead.bottom.active { transform: translateY(-35px) scaleY(0.85); }
+
+        .input-section { margin-top: 20px; display: flex; gap: 15px; background: #f9f9f9; padding: 20px; border-radius: 20px; border: 2px solid #eee; }
+        #answer-input { font-size: 2em; width: 80px; text-align: center; border: 3px solid #ccc; border-radius: 15px; outline: none; }
+        .btn-group { display: flex; gap: 15px; }
+
+        .game-btn {
+            font-family: 'Comic Sans MS', sans-serif;
+            font-size: 1.2em;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: transform 0.1s;
+            color: white;
+        }
+
+        .game-btn:active { transform: translateY(3px); box-shadow: none !important; }
+
+        #check-btn {
+            background-color: #2a9d8f;
+            box-shadow: 0 5px #1a7a6f;
+        }
+
+        #reset-btn {
+            background-color: #e63946;
+            box-shadow: 0 5px #a62933;
+        }
+        #message { margin-top: 15px; font-size: 1.5em; font-weight: bold; min-height: 40px; }
+
+        /* MOBILE RESPONSIVENESS FIXES */
+        @media (max-width: 500px) {
+            body { padding-top: 10px; }
+            .abacus-frame { transform: scale(0.7); }
+            .abacus-scaler {
+                height: 200px;
+                min-height: 200px;
+                margin-bottom: 10px;
+            }
+            h1 { font-size: 1.6em !important; margin: 5px 0 !important; }
+            .input-section { margin-top: 10px; padding: 12px; }
+        }
+
+        .shake { animation: shake 0.4s; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="abacus-scaler">
+            <div class="abacus-frame">
+                <div class="beam"></div>
+                <div class="columns-container" id="abacus-columns"></div>
+            </div>
+        </div>
+
+        <div id="message"></div>
+
+    <div class="input-section">
+        <div class="btn-group">
+            <button id="reset-btn" class="game-btn">RESET</button>
+            <button id="check-btn" class="game-btn">CHECK</button>
+        </div>
+    </div>
+
+    </div>
+
+    <audio id="sound-correct"></audio>
+    <audio id="sound-wrong"></audio>
+    <script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
+
+    <script>
+        const abacusContainer = document.getElementById('abacus-columns');
+        const checkBtn = document.getElementById('check-btn');
+        const messageDiv = document.getElementById('message');
+        const jsConfetti = new JSConfetti();
+        const resetBtn = document.getElementById('reset-btn');
+
+        let currentTargetNumber = 0;
+        let isProcessing = false;
+
+        // Function to clear all active beads
+        function resetAbacus() {
+            document.querySelectorAll('.bead').forEach(b => b.classList.remove('active'));
+        }
+
+        // Add event listener
+        resetBtn.onclick = () => {
+            resetAbacus();
+        };
+
+        // Update the start function to call resetAbacus
+        function start() {
+            currentTargetNumber = Math.floor(Math.random() * 101);
+            messageDiv.innerHTML = `Set the Abacus to: <span style="color:#457b9d; font-size:1.5em">${currentTargetNumber}</span>`;
+            resetAbacus();
+            isProcessing = false;
+        }
+
+        function build() {
+            abacusContainer.innerHTML = '';
+            for (let i = 0; i < 7; i++) {
+                const col = document.createElement('div');
+                col.className = `column col-${i}`;
+
+                const topBead = document.createElement('div');
+                topBead.className = 'bead top';
+                topBead.id = `c${i}t`;
+                topBead.onclick = () => topBead.classList.toggle('active');
+
+                const topDeck = document.createElement('div');
+                topDeck.className = 'top-deck';
+                topDeck.appendChild(topBead);
+
+                const bottomDeck = document.createElement('div');
+                bottomDeck.className = 'bottom-deck';
+                bottomDeck.id = `c${i}b`;
+
+                for (let j = 0; j < 4; j++) {
+                    const botBead = document.createElement('div');
+                    botBead.className = 'bead bottom';
+                    botBead.id = `c${i}b${j}`;
+                    botBead.onclick = () => toggleBottomBeads(i, j);
+                    bottomDeck.appendChild(botBead);
+                }
+
+                col.innerHTML = '<div class="rod"></div>';
+                col.appendChild(topDeck);
+                col.appendChild(bottomDeck);
+                abacusContainer.appendChild(col);
+            }
+        }
+
+        function toggleBottomBeads(colIdx, beadIdx) {
+            const beads = document.querySelectorAll(`.col-${colIdx} .bottom`);
+            const isCurrentlyActive = beads[beadIdx].classList.contains('active');
+            beads.forEach((b, i) => {
+                if (!isCurrentlyActive && i <= beadIdx) b.classList.add('active');
+                else if (isCurrentlyActive && i >= beadIdx) b.classList.remove('active');
+            });
+        }
+
+        function getAbacusValue() {
+            let total = 0;
+            for (let i = 0; i < 7; i++) {
+                let colVal = 0;
+                if (document.getElementById(`c${i}t`).classList.contains('active')) colVal += 5;
+                colVal += document.querySelectorAll(`.col-${i} .bottom.active`).length;
+                total += colVal * Math.pow(10, (6 - i));
+            }
+            return total;
+        }
+
+        function start() {
+            currentTargetNumber = Math.floor(Math.random() * (10 ** 7));
+            messageDiv.innerHTML = `Set the Abacus to: <span style="color:#457b9d; font-size:1.5em">${currentTargetNumber}</span>`;
+            document.querySelectorAll('.bead').forEach(b => b.classList.remove('active'));
+            isProcessing = false;
+        }
+
+        checkBtn.onclick = () => {
+            if (isProcessing) return;
+            const userValue = getAbacusValue();
+            if (userValue === currentTargetNumber) {
+                isProcessing = true;
+                messageDiv.innerHTML = "<span style='color:#2a9d8f'>Correct! 🥳</span>";
+                document.getElementById('sound-correct').play();
+                jsConfetti.addConfetti();
+                setTimeout(start, 2000);
+            } else {
+                messageDiv.innerHTML = `<span style='color:#e63946'>That's ${userValue}. Try again! Set to ${currentTargetNumber}</span>`;
+                document.getElementById('sound-wrong').play();
+                document.querySelector('.abacus-frame').classList.add('shake');
+                setTimeout(() => document.querySelector('.abacus-frame').classList.remove('shake'), 400);
+            }
+        };
+
+        // Audio Logic
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const playTone = (freqs, type = 'sine', duration = 0.1) => {
+            const now = audioContext.currentTime;
+            freqs.forEach((f, i) => {
+                const osc = audioContext.createOscillator();
+                const g = audioContext.createGain();
+                osc.type = type; osc.connect(g); g.connect(audioContext.destination);
+                osc.frequency.setValueAtTime(f, now + (i * 0.08));
+                g.gain.setValueAtTime(0.2, now + (i * 0.08));
+                g.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.08) + duration);
+                osc.start(now + (i * 0.08)); osc.stop(now + (i * 0.08) + duration + 0.1);
+            });
+        };
+
+        document.getElementById('sound-correct').play = () => playTone([261.6, 329.6, 392, 523.2]);
+        document.getElementById('sound-wrong').play = () => playTone([200, 150], 'triangle', 0.2);
+
+        build(); start();
+    </script>
+</body>
+</html>
