@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gallery</title>
+    <style>
+        body {
+            background: #ffffff;
+            margin: 20px;
+        }
+        .grid-container {
+            display: grid;
+            /* Creates as many 128px columns as fit, with a 16px gap */
+            grid-template-columns: repeat(auto-fill, 128px);
+            gap: 16px;
+            justify-content: center;
+        }
+        .grid-item {
+            width: 128px;
+            height: 128px;
+            display: block;
+            overflow: hidden;
+            border-radius: 4px;
+            transition: opacity 0.2s;
+        }
+        .grid-item:hover {
+            opacity: 0.8;
+        }
+        .grid-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Ensures images fill the 128x128 square without distorting */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grid-container">
+        <a href="calculator.html" class="grid-item">
+            <img src="assets/calculator_128.png" alt="calculator">
+        </a>
+        <a href="sliding_tiles.html" class="grid-item">
+            <img src="assets/sliding_tiles_128.png" alt="sliding_tiles">
+        </a>
+        <a href="abacus_move.html" class="grid-item">
+            <img src="assets/abacus_128.png" alt="abacus_move">
+        </a>
+        <a href="chess_moves.html" class="grid-item">
+            <img src="assets/chess_128.png" alt="chess_moves">
+        </a>
+        </div>
+
+</body>
+</html>
