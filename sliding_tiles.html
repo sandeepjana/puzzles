@@ -100,15 +100,6 @@
             z-index: 0;
         }
 
-        /* Controls */
-        .controls {
-            margin-top: 30px;
-            display: flex;
-            gap: 15px;
-            justify-content: center;
-            z-index: 20;
-        }
-
         button {
             padding: 12px 24px;
             font-size: 1rem;
@@ -133,6 +124,44 @@
             30%, 50%, 70% { transform: translateX(-6px); }
             40%, 60% { transform: translateX(6px); }
         }
+
+        /* 1. Default (Portrait): Buttons are horizontal */
+        .controls {
+            margin-top: 30px;
+            display: flex;
+            flex-direction: row; /* Horizontal alignment */
+            gap: 15px;
+            justify-content: center;
+            z-index: 20;
+        }
+
+        /* 2. Landscape: Board and Buttons go side-by-side, Buttons stack vertically */
+        @media (orientation: landscape) {
+            :root {
+                --board-size: min(70vh, 400px);
+            }
+
+            /* Wrap the board and buttons to sit side-by-side */
+            .game-wrapper {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: center;
+                gap: 30px;
+            }
+
+            .controls {
+                flex-direction: column; /* Vertical alignment in landscape */
+                margin-top: 0;
+                gap: 12px;
+            }
+
+            button {
+                width: 130px; /* Fixed width looks better when stacked */
+                padding: 10px 15px;
+            }
+        }
+
     </style>
 </head>
 <body>
@@ -141,14 +170,17 @@
     <p>Drag tiles to move or Tap to slide multiple.</p>
 
     <div id="message-area">Setup Phase</div>
+    <div class="game-wrapper">
 
-    <div class="board" id="board">
+
+        <div class="board" id="board">
+            </div>
+
+        <div class="controls">
+            <button class="btn-shuffle" onclick="handleShuffle()">Shuffle</button>
+            <button class="btn-start" onclick="startGame()">Start</button>
+            <button class="btn-reset" onclick="resetGame()">Reset</button>
         </div>
-
-    <div class="controls">
-        <button class="btn-shuffle" onclick="handleShuffle()">Shuffle</button>
-        <button class="btn-start" onclick="startGame()">Start</button>
-        <button class="btn-reset" onclick="resetGame()">Reset</button>
     </div>
 
     <script>
