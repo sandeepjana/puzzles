@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>వర్ణమాల</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            user-select: none;
+            color: #d39191;
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: #1a1a1a;
+            }
+        }
+
+        /* Landscape layout */
+        @media (orientation: landscape) and (min-width: 768px) {
+            body {
+                flex-direction: row;
+                justify-content: center;
+                gap: 40px;
+                align-items: center;
+            }
+
+            .left-panel {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .canvas-container {
+                order: 2;
+            }
+        }
+
+        /* Telugu font stack for cross-platform support */
+        .telugu-text {
+            font-family: 'Noto Sans Telugu', 'Gautami', 'Pothana2000', 'Vani', sans-serif;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 350px;
+            height: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        #progressBar {
+            width: 0%;
+            height: 100%;
+            background: #28a745;
+            transition: width 0.2s;
+        }
+
+        .pagination-controls { display: flex; gap: 15px; margin-bottom: 15px; align-items: center; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:disabled { background: #ccc; }
+
+        .letter-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px; }
+        .grid-item { width: 45px; height: 45px; background: white; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; border-radius: 5px; }
+        .grid-item.active { background: #007bff; color: white; }
+
+        .canvas-container { background: white; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); position: relative; }
+        canvas { cursor: crosshair; touch-action: none; border-radius: 12px; }
+
+        .status-bar { margin-top: 15px; height: 30px; font-weight: bold; }
+        .error { color: #dc3545; }
+        .success { color: #28a745; font-size: 1.2em; }
+        .clear-btn { background: #6c757d; margin-top: 1px; }
+    </style>
+</head>
+<body>
+
+    <div class="left-panel">
+        <h2>వర్ణమాల</h2>
+
+        <div class="progress-container"><div id="progressBar"></div></div>
+
+        <div class="pagination-controls">
+            <button onclick="changePage(-1)" id="prevBtn">Prev</button>
+            <span id="pageIndicator">Page 1</span>
+            <button onclick="changePage(1)" id="nextBtn">Next</button>
+        </div>
+
+        <div class="letter-grid telugu-text" id="letterGrid"></div>
+
+        <div class="status-bar" id="statusMessage"></div>
+        <button class="clear-btn" onclick="clearCanvas()">Clear / Retry</button>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="practiceCanvas" width="350" height="350"></canvas>
+    </div>
+
+    <script>
+        const teluguFont = "'Noto Sans Telugu', 'Gautami', 'Pothana2000', 'Vani', sans-serif";
+        const teluguLetters = ['అ', 'ఆ', 'ఇ', 'ఈ', 'ఉ', 'ఊ', 'ఋ', 'ఎ', 'ఏ', 'ఐ', 'ఒ', 'ఓ', 'ఔ', 'అం', 'అః', 'క', 'ఖ', 'గ', 'ఘ', 'ఙ', 'చ', 'ఛ', 'జ', 'ఝ', 'ఞ', 'ట', 'ఠ', 'డ', 'ఢ', 'ణ', 'త', 'థ', 'ద', 'ధ', 'న', 'ప', 'ఫ', 'బ', 'భ', 'మ', 'య', 'ర', 'ల', 'వ', 'శ', 'ష', 'స', 'హ', 'ళ', 'క్ష', 'ఱ'];
+        let currentPage = 0, itemsPerPage = 6, currentLetter = teluguLetters[0];
+        let isDrawing = false, hasDeviated = false;
+
+        const BRUSH_SIZE = 14;      // Visual stroke
+        const PROGRESS_SIZE = 60;   // Invisible "fill" stroke
+        const PROGRESS_RADIUS = PROGRESS_SIZE / 2;
+        let lastX = 0, lastY = 0;
+
+        // Progress Logic Variables
+        let totalTargetPixels = 0;
+        let coveredPixelsCount = 0;
+        let hitData = null; // Buffer for the target letter
+        let progressMap = null; // To track unique pixels touched
+
+        const canvas = document.getElementById('practiceCanvas');
+        const ctx = canvas.getContext('2d');
+        const hitCanvas = document.createElement('canvas');
+        hitCanvas.width = canvas.width; hitCanvas.height = canvas.height;
+        const hitCtx = hitCanvas.getContext('2d');
+
+        // Load the letter immediately since we're using system fonts
+        loadLetter(currentLetter);
+
+        function renderGrid() {
+            const grid = document.getElementById('letterGrid');
+            grid.innerHTML = '';
+            const start = currentPage * itemsPerPage;
+            const pageItems = teluguLetters.slice(start, start + itemsPerPage);
+            pageItems.forEach(char => {
+                const div = document.createElement('div');
+                div.className = `grid-item ${char === currentLetter ? 'active' : ''}`;
+                div.innerText = char;
+                div.onclick = () => { currentLetter = char; loadLetter(char); renderGrid(); };
+                grid.appendChild(div);
+            });
+            document.getElementById('pageIndicator').innerText = `Page ${currentPage + 1}`;
+            document.getElementById('prevBtn').disabled = currentPage === 0;
+            document.getElementById('nextBtn').disabled = start + itemsPerPage >= teluguLetters.length;
+        }
+
+        renderGrid(); // Initial grid render
+
+        function changePage(dir) { currentPage += dir; renderGrid(); }
+
+        function loadLetter(char) {
+            isDrawing = false; hasDeviated = false;
+            coveredPixelsCount = 0;
+            updateProgress(0);
+            document.getElementById('statusMessage').innerHTML = "";
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            hitCtx.clearRect(0, 0, hitCanvas.width, hitCanvas.height);
+
+            const fontSize = 220;
+            hitCtx.font = `${fontSize}px ${teluguFont}`;
+            hitCtx.textAlign = "center"; hitCtx.textBaseline = "middle";
+
+            // Set thickness to match the Progress Brush BEFORE drawing
+            hitCtx.lineWidth = PROGRESS_SIZE;
+            hitCtx.strokeStyle = "black";
+            hitCtx.fillStyle = "black";
+
+            // Draw stroke first, then fill to create thicker target
+            hitCtx.strokeText(char, 175, 175);
+            hitCtx.fillText(char, 175, 175);
+
+            const imgData = hitCtx.getImageData(0, 0, canvas.width, canvas.height);
+            hitData = imgData.data;
+
+            totalTargetPixels = 0;
+            // progressMap stores which pixels have been traced (size = total pixels in canvas)
+            progressMap = new Uint8Array(canvas.width * canvas.height);
+
+            for (let i = 0; i < hitData.length; i += 4) {
+                if (hitData[i + 3] > 0) totalTargetPixels++;
+            }
+
+            // Draw visual guide (fill only, no stroke for proper appearance)
+            ctx.font = `${fontSize}px ${teluguFont}`;
+            ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            ctx.fillStyle = "#e9ecef";
+            ctx.fillText(char, 175, 175);
+            renderGrid();
+        }
+
+        function updateProgress(val) {
+            document.getElementById('progressBar').style.width = val + '%';
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor((e.touches ? e.touches[0].clientX : e.clientX) - rect.left);
+            const y = Math.floor((e.touches ? e.touches[0].clientY : e.clientY) - rect.top);
+
+            // Interpolate to fill gaps between mouse events
+            const dist = Math.hypot(x - lastX, y - lastY);
+            const steps = Math.ceil(dist / 2);
+
+            for (let s = 0; s <= steps; s++) {
+                const ix = Math.floor(lastX + (x - lastX) * (s / steps));
+                const iy = Math.floor(lastY + (y - lastY) * (s / steps));
+
+                // 1. Strict Collision Check (Out of Bounds)
+                const alphaIdx = (iy * canvas.width + ix) * 4 + 3;
+                if (hitData[alphaIdx] === 0) {
+                    hasDeviated = true;
+                    document.getElementById('statusMessage').innerHTML = "<span class='error'>Out of bounds!</span>";
+                }
+
+                // 2. Progress Tracking (Using PROGRESS_SIZE radius)
+                for (let i = -PROGRESS_RADIUS; i <= PROGRESS_RADIUS; i++) {
+                    for (let j = -PROGRESS_RADIUS; j <= PROGRESS_RADIUS; j++) {
+                        const px = ix + i, py = iy + j;
+                        const pIdx = py * canvas.width + px;
+                        if (pIdx >= 0 && pIdx < progressMap.length && progressMap[pIdx] === 0) {
+                            if (hitData[pIdx * 4 + 3] > 0) {
+                                progressMap[pIdx] = 1;
+                                coveredPixelsCount++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Visual Drawing
+            ctx.strokeStyle = hasDeviated ? "rgba(220, 53, 69, 0.4)" : "#C1576B";
+            ctx.lineWidth = BRUSH_SIZE;
+            ctx.lineCap = 'round';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+
+            updateProgress((coveredPixelsCount / totalTargetPixels) * 100);
+            [lastX, lastY] = [x, y];
+        }
+
+
+        function endPosition() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            const completion = (coveredPixelsCount / totalTargetPixels) * 100;
+
+            if (completion > 85 && !hasDeviated) {
+                document.getElementById('statusMessage').innerHTML = "<span class='success'>Correct! Loading next...</span>";
+                setTimeout(() => {
+                    const idx = teluguLetters.indexOf(currentLetter);
+                    if (idx < teluguLetters.length - 1) {
+                        currentLetter = teluguLetters[idx + 1];
+                        currentPage = Math.floor((idx + 1) / itemsPerPage);
+                        loadLetter(currentLetter);
+                    }
+                }, 1000);
+            }
+            ctx.beginPath();
+        }
+
+        // Update mousedown/touchstart to set initial lastX/lastY
+        canvas.onmousedown = (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            lastX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            lastY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            draw(e);
+        };
+
+        window.onmouseup = endPosition;
+        canvas.onmousemove = draw;
+        canvas.ontouchstart = (e) => { e.preventDefault(); isDrawing = true; draw(e); };
+        canvas.ontouchend = endPosition;
+        canvas.ontouchmove = (e) => { e.preventDefault(); draw(e); };
+
+        function clearCanvas() { loadLetter(currentLetter); }
+    </script>
+</body>
+</html>
