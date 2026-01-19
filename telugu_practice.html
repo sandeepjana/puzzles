@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"">
     <title>వర్ణమాల</title>
     <style>
         body {
@@ -102,12 +102,12 @@
     </div>
 
     <div class="canvas-container">
-        <canvas id="practiceCanvas" width="350" height="350"></canvas>
+        <canvas id="practiceCanvas" width="500" height="500"></canvas>
     </div>
 
     <script>
         const teluguFont = "'Noto Sans Telugu', 'Gautami', 'Pothana2000', 'Vani', sans-serif";
-        const teluguLetters = ['అ', 'ఆ', 'ఇ', 'ఈ', 'ఉ', 'ఊ', 'ఋ', 'ఎ', 'ఏ', 'ఐ', 'ఒ', 'ఓ', 'ఔ', 'అం', 'అః', 'క', 'ఖ', 'గ', 'ఘ', 'ఙ', 'చ', 'ఛ', 'జ', 'ఝ', 'ఞ', 'ట', 'ఠ', 'డ', 'ఢ', 'ణ', 'త', 'థ', 'ద', 'ధ', 'న', 'ప', 'ఫ', 'బ', 'భ', 'మ', 'య', 'ర', 'ల', 'వ', 'శ', 'ష', 'స', 'హ', 'ళ', 'క్ష', 'ఱ'];
+        const teluguLetters = ['అ', 'ఆ', 'ఇ', 'ఈ', 'ఉ', 'ఊ', 'ఋ', 'ౠ', 'ఎ', 'ఏ', 'ఐ', 'ఒ', 'ఓ', 'ఔ', 'అం', 'అః', 'క', 'ఖ', 'గ', 'ఘ', 'ఙ', 'చ', 'ఛ', 'జ', 'ఝ', 'ఞ', 'ట', 'ఠ', 'డ', 'ఢ', 'ణ', 'త', 'థ', 'ద', 'ధ', 'న', 'ప', 'ఫ', 'బ', 'భ', 'మ', 'య', 'ర', 'ల', 'వ', 'శ', 'ష', 'స', 'హ', 'ళ', 'క్ష', 'ఱ'];
         let currentPage = 0, itemsPerPage = 6, currentLetter = teluguLetters[0];
         let isDrawing = false, hasDeviated = false;
 
@@ -130,6 +130,25 @@
 
         // Load the letter immediately since we're using system fonts
         loadLetter(currentLetter);
+
+        // Audio Context
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const initAudio = () => { if (audioContext.state === 'suspended') audioContext.resume(); };
+        const playTone = (freqs, type = 'sine', duration = 0.1) => {
+            initAudio();
+            const now = audioContext.currentTime;
+            freqs.forEach((f, i) => {
+                const osc = audioContext.createOscillator();
+                const g = audioContext.createGain();
+                osc.type = type; osc.connect(g); g.connect(audioContext.destination);
+                osc.frequency.setValueAtTime(f, now + (i * 0.08));
+                g.gain.setValueAtTime(0, now + (i * 0.08));
+                g.gain.linearRampToValueAtTime(0.2, now + (i * 0.08) + 0.01);
+                g.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.08) + duration);
+                osc.start(now + (i * 0.08)); osc.stop(now + (i * 0.08) + duration + 0.1);
+            });
+        };
+        const soundCorrect = { play: () => playTone([261.6, 329.6, 392, 523.2]) };
 
         function renderGrid() {
             const grid = document.getElementById('letterGrid');
@@ -160,7 +179,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             hitCtx.clearRect(0, 0, hitCanvas.width, hitCanvas.height);
 
-            const fontSize = 220;
+            const fontSize = 280;
             hitCtx.font = `${fontSize}px ${teluguFont}`;
             hitCtx.textAlign = "center"; hitCtx.textBaseline = "middle";
 
@@ -170,8 +189,9 @@
             hitCtx.fillStyle = "black";
 
             // Draw stroke first, then fill to create thicker target
-            hitCtx.strokeText(char, 175, 175);
-            hitCtx.fillText(char, 175, 175);
+            const half_side = 250
+            hitCtx.strokeText(char, half_side, half_side);
+            hitCtx.fillText(char, half_side, half_side);
 
             const imgData = hitCtx.getImageData(0, 0, canvas.width, canvas.height);
             hitData = imgData.data;
@@ -188,7 +208,7 @@
             ctx.font = `${fontSize}px ${teluguFont}`;
             ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillStyle = "#e9ecef";
-            ctx.fillText(char, 175, 175);
+            ctx.fillText(char, half_side, half_side);
             renderGrid();
         }
 
@@ -205,6 +225,7 @@
             // Interpolate to fill gaps between mouse events
             const dist = Math.hypot(x - lastX, y - lastY);
             const steps = Math.ceil(dist / 2);
+            const progress = (coveredPixelsCount / totalTargetPixels) * 100
 
             for (let s = 0; s <= steps; s++) {
                 const ix = Math.floor(lastX + (x - lastX) * (s / steps));
@@ -212,7 +233,7 @@
 
                 // 1. Strict Collision Check (Out of Bounds)
                 const alphaIdx = (iy * canvas.width + ix) * 4 + 3;
-                if (hitData[alphaIdx] === 0) {
+                if (hitData[alphaIdx] === 0 && progress > 20) {
                     hasDeviated = true;
                     document.getElementById('statusMessage').innerHTML = "<span class='error'>Out of bounds!</span>";
                 }
@@ -233,7 +254,7 @@
             }
 
             // Visual Drawing
-            ctx.strokeStyle = hasDeviated ? "rgba(220, 53, 69, 0.4)" : "#C1576B";
+            ctx.strokeStyle = hasDeviated ? "rgba(220, 53, 69, 0.4)" : "green";
             ctx.lineWidth = BRUSH_SIZE;
             ctx.lineCap = 'round';
             ctx.lineTo(x, y);
@@ -253,6 +274,7 @@
 
             if (completion > 85 && !hasDeviated) {
                 document.getElementById('statusMessage').innerHTML = "<span class='success'>Correct! Loading next...</span>";
+                soundCorrect.play();
                 setTimeout(() => {
                     const idx = teluguLetters.indexOf(currentLetter);
                     if (idx < teluguLetters.length - 1) {
