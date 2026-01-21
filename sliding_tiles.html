@@ -15,7 +15,7 @@
             --tile-size: calc((var(--board-size) - (var(--gap) * 4)) / 3);
         }
 
-        /* Dark mode (system preference) */
+       /* Automatic System Dark Mode Detection */
         @media (prefers-color-scheme: dark) {
             :root {
                 --bg-color: #121212;
@@ -25,10 +25,6 @@
                 --board-size: min(90vw, 400px);
                 --tile-size: calc((var(--board-size) - (var(--gap) * 4)) / 3);
             }
-        }
-
-        /* Automatic System Dark Mode Detection */
-        @media (prefers-color-scheme: dark) {
             body {
                 background-color: #121212;
             }
@@ -67,7 +63,19 @@
             background-color: #f0f0f0;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            /* Padding is handled by absolute positioning logic now for smoother anims */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #animal-emoji {
+            position: absolute;
+            font-size: 15rem;
+            z-index: 1;
+            opacity: 0.15;
+            pointer-events: none;
+            user-select: none;
+            transition: opacity 0.5s ease-out, font-size 0.5s ease-out;
         }
 
         .tile {
@@ -94,6 +102,11 @@
             z-index: 10;
         }
 
+        .tile.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         .tile.empty {
             background: transparent;
             box-shadow: none;
@@ -112,6 +125,7 @@
         }
 
         button:active { transform: scale(0.95); opacity: 0.9; }
+        button:disabled { cursor: not-allowed; }
         .btn-shuffle { background-color: #ffd166; color: #444; }
         .btn-start { background-color: #06d6a0; color: white; }
         .btn-reset { background-color: #ef476f; color: white; }
@@ -133,6 +147,11 @@
             gap: 15px;
             justify-content: center;
             z-index: 20;
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.2;
         }
 
         /* 2. Landscape: Board and Buttons go side-by-side, Buttons stack vertically */
@@ -174,11 +193,12 @@
 
 
         <div class="board" id="board">
+            <div id="animal-emoji">🦁</div>
             </div>
 
         <div class="controls">
             <button class="btn-shuffle" onclick="handleShuffle()">Shuffle</button>
-            <button class="btn-start" onclick="startGame()">Start</button>
+            <button class="btn-start" id="start-btn" onclick="startGame()" disabled>Start</button>
             <button class="btn-reset" onclick="resetGame()">Reset</button>
         </div>
     </div>
@@ -193,6 +213,8 @@
         const gridSize = 3;
         let isGameActive = false;
         let isProcessingWin = false;
+        const animals = ['🦁', '🐘', '🦒', '🐼', '🦊', '🐯', '🦓', '🐨', '🦘', '🦄', '🐷', '🐶', '🦮', '🐮', '🐭', '🐹', '🐰', '🐻', '🐯', '🐮', '🐵', '🐸']
+        let currentAnimal = animals[Math.floor(Math.random() * animals.length)];
 
         // Visual Metrics (calculated on load/resize)
         let boardWidth, tileTotalSize, gapSize;
@@ -242,8 +264,13 @@
         }
 
         function renderBoard() {
-            boardEl.innerHTML = '';
+            const tilesElements = boardEl.querySelectorAll('.tile');
+            tilesElements.forEach(el => el.remove());
+
             updateMetrics();
+
+            const emojiEl = document.getElementById('animal-emoji');
+            emojiEl.textContent = currentAnimal;
 
             tiles.forEach((num, index) => {
                 const tile = document.createElement('div');
@@ -465,8 +492,34 @@
                 messageDiv.innerHTML = "<span style='color:#2a9d8f'>Correct! 🥳</span>";
                 soundCorrect.play();
                 jsConfetti.addConfetti({ emojis: ['🥳', '✨', '🧩'], confettiRadius: 6, confettiNumber: 100 });
-                isGameActive = false;
+
+                disableButtons(true);
+
+                const allTiles = boardEl.querySelectorAll('.tile');
+                allTiles.forEach(tile => tile.classList.add('hidden'));
+
+                const emojiEl = document.getElementById('animal-emoji');
+                emojiEl.style.opacity = '1';
+                emojiEl.style.fontSize = '18rem';
+
+                setTimeout(() => {
+                    allTiles.forEach(tile => tile.classList.remove('hidden'));
+                    emojiEl.style.opacity = '0.15';
+                    emojiEl.style.fontSize = '15rem';
+                    disableButtons(false);
+                    isGameActive = false;
+                    isProcessingWin = false;
+                }, 5000);
             }
+        }
+
+        function disableButtons(disabled) {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => {
+                btn.disabled = disabled;
+                btn.style.opacity = disabled ? '0.5' : '1';
+                btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+            });
         }
 
         // ---------------------------------------------------------
@@ -477,6 +530,10 @@
             if (isProcessingWin) return;
             isGameActive = false;
             messageDiv.innerHTML = "Shuffling...";
+
+            currentAnimal = animals[Math.floor(Math.random() * animals.length)];
+            document.getElementById('animal-emoji').textContent = currentAnimal;
+
             let moves = 0;
             const interval = setInterval(() => {
                 const emptyIndex = tiles.indexOf(0);
@@ -494,6 +551,12 @@
                     clearInterval(interval);
                     messageDiv.innerHTML = "Ready? Click Start!";
                     messageDiv.style.color = "#333";
+
+                    // Enable the Start button after shuffle
+                    const startBtn = document.getElementById('start-btn');
+                    startBtn.disabled = false;
+                    startBtn.style.opacity = '1';
+                    startBtn.style.cursor = 'pointer';
                 }
             }, 10);
         }
