@@ -213,7 +213,7 @@
         const gridSize = 3;
         let isGameActive = false;
         let isProcessingWin = false;
-        const animals = ['🦁', '🐘', '🦒', '🐼', '🦊', '🐯', '🦓', '🐨', '🦘', '🦄', '🐷', '🐶', '🦮', '🐮', '🐭', '🐹', '🐰', '🐻', '🐯', '🐮', '🐵', '🐸']
+        const animals = ['🦁', '🐘', '🦒', '🐼', '🦊', '🐯', '🦓', '🐨', '🦘', '🦄', '🐷', '🐶', '🦮', '🐭', '🐹', '🐰', '🐻', '🐯', '🐮', '🐵', '🐸']
         let currentAnimal = animals[Math.floor(Math.random() * animals.length)];
 
         // Visual Metrics (calculated on load/resize)
@@ -308,7 +308,7 @@
         let emptyNeighborDirection = 0; // -1 or 1
 
         function startDrag(e, index) {
-            if (isProcessingWin) return;
+            if (isProcessingWin || !isGameActive) return;
             initAudio();
 
             // Prevent default touch behavior (scrolling)
@@ -434,7 +434,7 @@
         // ---------------------------------------------------------
 
         function handleTileClick(index) {
-            if (isProcessingWin) return;
+            if (isProcessingWin || !isGameActive) return;
 
             const emptyIndex = tiles.indexOf(0);
             const r = Math.floor(index / gridSize);
@@ -500,7 +500,7 @@
 
                 const emojiEl = document.getElementById('animal-emoji');
                 emojiEl.style.opacity = '1';
-                emojiEl.style.fontSize = '18rem';
+                emojiEl.style.fontSize = '20rem';
 
                 setTimeout(() => {
                     allTiles.forEach(tile => tile.classList.remove('hidden'));
@@ -509,6 +509,9 @@
                     disableButtons(false);
                     isGameActive = false;
                     isProcessingWin = false;
+
+                    // Automatically shuffle for next round
+                    handleShuffle();
                 }, 5000);
             }
         }
