@@ -155,6 +155,13 @@
             opacity: 0.2;
         }
 
+        #reward-collection {
+            max-width: var(--board-size);
+            padding: 10px;
+            background: rgba(178, 216, 178, 0.1);
+            border-radius: 12px;
+        }
+
         /* 2. Landscape: Board and Buttons go side-by-side, Buttons stack vertically */
         @media (orientation: landscape) {
             :root {
@@ -204,6 +211,9 @@
         </div>
     </div>
 
+    <div id="reward-collection" style="margin-top: 30px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; font-size: 5rem; min-height: 40px;">
+    </div>
+
     <script>
         const jsConfetti = new JSConfetti();
         const boardEl = document.getElementById('board');
@@ -216,6 +226,7 @@
         let isProcessingWin = false;
         const animals = ['🦁', '🐘', '🦒', '🐼', '🦊', '🐯', '🦓', '🐨', '🦘', '🦄', '🐷', '🐶', '🦮', '🐭', '🐹', '🐰', '🐻', '🐯', '🐮', '🐵', '🐸']
         let currentAnimal = animals[Math.floor(Math.random() * animals.length)];
+        let collectedAnimals = [];
 
         // Visual Metrics (calculated on load/resize)
         let boardWidth, tileTotalSize, gapSize;
@@ -491,6 +502,12 @@
             if (isSolved) {
                 isProcessingWin = true;
                 messageDiv.innerHTML = "<span style='color:#2a9d8f'>Correct! 🥳</span>";
+
+                // 1. Add current animal to collection if not already handled
+                collectedAnimals.push(currentAnimal);
+                const rewardDiv = document.getElementById('reward-collection');
+                rewardDiv.innerHTML = collectedAnimals.map(a => `<span>${a}</span>`).join('');
+
                 soundCorrect.play();
                 jsConfetti.addConfetti({ emojis: ['🥳', '✨', '🧩'], confettiRadius: 6, confettiNumber: 100 });
 
