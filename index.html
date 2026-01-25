@@ -3,9 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gallery</title>
+    <title>Puzzle Gallery</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧩</text></svg>">
     <style>
         body { background: #ffffff; margin: 20px; font-family: sans-serif; }
+
+        /* Header & Toggle */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 0 20px;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: #333;
+        }
+
+        /* Larger Font for the Label */
+        #toggle-label {
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        /* Standard Checkbox sizing */
+        #lock-toggle {
+            transform: scale(1.5); /* Make the actual checkbox bigger too */
+            cursor: pointer;
+        }
 
         /* Grid Layout */
         .grid-container {
@@ -37,22 +66,13 @@
 
         /* Passcode Display */
         #dot-container { display: flex; gap: 15px; margin-bottom: 30px; }
-        .dot {
-            width: 15px; height: 15px;
-            border: 2px solid #333; border-radius: 50%;
-        }
+        .dot { width: 15px; height: 15px; border: 2px solid #333; border-radius: 50%; }
         .dot.filled { background: #333; }
 
         /* Keypad */
-        .keypad {
-            display: grid;
-            grid-template-columns: repeat(3, 70px);
-            gap: 20px;
-            text-align: center;
-        }
+        .keypad { display: grid; grid-template-columns: repeat(3, 70px); gap: 20px; text-align: center; }
         .key {
-            width: 70px; height: 70px;
-            border-radius: 50%; border: 1px solid #ddd;
+            width: 70px; height: 70px; border-radius: 50%; border: 1px solid #ddd;
             display: flex; align-items: center; justify-content: center;
             font-size: 24px; cursor: pointer; user-select: none;
         }
@@ -62,26 +82,34 @@
 </head>
 <body>
 
+    <div class="header">
+        <h2>My Gallery</h2>
+        <div class="toggle-container">
+            <label for="lock-toggle" id="toggle-label">Lock Puzzles</label>
+            <input type="checkbox" id="lock-toggle" onclick="handleToggleClick(event)">
+        </div>
+    </div>
+
     <div class="grid-container">
-        <a href="calculator.html" class="grid-item" onclick="openLock(event, 'calculator.html')">
+        <a href="calculator.html" class="grid-item" onclick="handleNavigation(event, 'calculator.html')">
             <img src="assets/calculator_128.png" alt="calculator">
         </a>
-        <a href="sliding_tiles.html" class="grid-item" onclick="openLock(event, 'sliding_tiles.html')">
+        <a href="sliding_tiles.html" class="grid-item" onclick="handleNavigation(event, 'sliding_tiles.html')">
             <img src="assets/sliding_tiles_128.png" alt="sliding_tiles">
         </a>
-        <a href="abacus_move.html" class="grid-item" onclick="openLock(event, 'abacus_move.html')">
+        <a href="abacus_move.html" class="grid-item" onclick="handleNavigation(event, 'abacus_move.html')">
             <img src="assets/abacus_128.png" alt="abacus_move">
         </a>
-        <a href="chess_moves.html" class="grid-item" onclick="openLock(event, 'chess_moves.html')">
+        <a href="chess_moves.html" class="grid-item" onclick="handleNavigation(event, 'chess_moves.html')">
             <img src="assets/chess_128.png" alt="chess_moves">
         </a>
-        <a href="telugu_practice.html" class="grid-item" onclick="openLock(event, 'telugu_practice.html')">
+        <a href="telugu_practice.html" class="grid-item" onclick="handleNavigation(event, 'telugu_practice.html')">
             <img src="assets/Telugu-alphabet-అ.png" alt="Telugu">
         </a>
     </div>
 
     <div id="lock-screen">
-        <h2 id="lock-status">Enter Passcode</h2>
+        <h2 id="lock-title">Enter Passcode</h2>
         <div id="dot-container">
             <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
         </div>
@@ -96,13 +124,51 @@
     </div>
 
     <script>
-        const PIN = "4321"; // Set your code here
+        const PIN = "1234";
         let currentInput = "";
-        let targetUrl = "";
+        let targetAction = null; // Can be a URL string or a function
 
-        function openLock(e, url) {
-            e.preventDefault();
-            targetUrl = url;
+        // Load saved state (Default to FALSE/OFF if not found)
+        window.onload = () => {
+            const isLocked = localStorage.getItem('isPuzzleLocked') === 'true';
+            document.getElementById('lock-toggle').checked = isLocked;
+        };
+
+        function handleToggleClick(e) {
+            const checkbox = e.target;
+
+            if (!checkbox.checked) {
+                // CASE: User is trying to Turn OFF (Disable)
+                // PREVENT IT initially. Require password to authorize.
+                e.preventDefault();
+
+                targetAction = () => {
+                    checkbox.checked = false;
+                    localStorage.setItem('isPuzzleLocked', 'false');
+                };
+                openLock("Enter Admin PIN to Unlock");
+
+            } else {
+                // CASE: User is trying to Turn ON (Enable)
+                // Allow immediately without password
+                localStorage.setItem('isPuzzleLocked', 'true');
+            }
+        }
+
+        function handleNavigation(e, url) {
+            const isLocked = document.getElementById('lock-toggle').checked;
+
+            if (isLocked) {
+                // If Locked: Prevent click, show lock screen
+                e.preventDefault();
+                targetAction = url;
+                openLock("Puzzle Locked");
+            }
+            // If Unlocked: Do nothing, let the <a> tag work normally
+        }
+
+        function openLock(title) {
+            document.getElementById('lock-title').innerText = title;
             currentInput = "";
             updateDots();
             document.getElementById('lock-screen').style.display = 'flex';
@@ -110,15 +176,17 @@
 
         function closeLock() {
             document.getElementById('lock-screen').style.display = 'none';
+            targetAction = null;
+            // Reset input just in case
+            currentInput = "";
+            updateDots();
         }
 
         function press(num) {
             if (currentInput.length < 4) {
                 currentInput += num;
                 updateDots();
-                if (currentInput.length === 4) {
-                    setTimeout(validate, 100);
-                }
+                if (currentInput.length === 4) setTimeout(validate, 100);
             }
         }
 
@@ -129,14 +197,19 @@
 
         function updateDots() {
             const dots = document.querySelectorAll('.dot');
-            dots.forEach((dot, i) => {
-                dot.classList.toggle('filled', i < currentInput.length);
-            });
+            dots.forEach((dot, i) => dot.classList.toggle('filled', i < currentInput.length));
         }
 
         function validate() {
             if (currentInput === PIN) {
-                window.location.href = targetUrl;
+                if (typeof targetAction === 'string') {
+                    // Navigate to URL
+                    window.location.href = targetAction;
+                } else if (typeof targetAction === 'function') {
+                    // Execute function (disable toggle)
+                    targetAction();
+                    closeLock();
+                }
             } else {
                 alert("Wrong Passcode");
                 currentInput = "";

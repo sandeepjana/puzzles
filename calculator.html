@@ -133,7 +133,15 @@
     function clearEntry(){ current=''; updateDisplay(); }
     function enter(){
       if(current === '') return;
-      if(parseInt(current, 10) === a + b){ score++; scoreEl.textContent = score; status('Correct!'); launchFireworks(); setTimeout(pickProblem, 1200); }
+      if(parseInt(current, 10) === a + b){
+        score++;
+        scoreEl.textContent = score;
+        status('Correct!');
+        soundCorrect.play();
+        launchFireworks();
+        setTimeout(pickProblem, 1200);
+
+      }
       else { status('Try again.', true); shakeDisplay(); }
     }
     function status(msg, isError){ statusEl.textContent = msg; statusEl.style.color = isError ? '#c92a6d' : '#ff8acb'; }
@@ -173,7 +181,29 @@
       });
       requestAnimationFrame(step);
     }
+
+    // Audio Context
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const initAudio = () => { if (audioContext.state === 'suspended') audioContext.resume(); };
+    const playTone = (freqs, type = 'sine', duration = 0.1) => {
+        initAudio();
+        const now = audioContext.currentTime;
+        freqs.forEach((f, i) => {
+            const osc = audioContext.createOscillator();
+            const g = audioContext.createGain();
+            osc.type = type; osc.connect(g); g.connect(audioContext.destination);
+            osc.frequency.setValueAtTime(f, now + (i * 0.08));
+            g.gain.setValueAtTime(0, now + (i * 0.08));
+            g.gain.linearRampToValueAtTime(0.2, now + (i * 0.08) + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.01, now + (i * 0.08) + duration);
+            osc.start(now + (i * 0.08)); osc.stop(now + (i * 0.08) + duration + 0.1);
+        });
+    };
+    const soundCorrect = { play: () => playTone([261.6, 329.6, 392, 523.2]) };
+
     step(); pickProblem();
+
+
   </script>
 </body>
 </html>
